@@ -14,7 +14,7 @@
 #
 
 {
-  pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/4cb48cc25622334f17ec6b9bf56e83de0d521fb7.tar.gz") {},
+  pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/21.11.tar.gz") {},
   mode ? "release",
   verbose ? false,
   useCcache ? false, # can't get this to work, see https://github.com/NixOS/nixpkgs/issues/49894
@@ -45,17 +45,13 @@ with pkgs; let
       })
     ];
   });
-  zstdStatic = zstd.overrideAttrs (_: {
-    cmakeFlags = [
-      "-DZSTD_BUILD_SHARED:BOOL=OFF"
-      "-DZSTD_BUILD_STATIC:BOOL=ON"
-      "-DZSTD_PROGRAMS_LINK_SHARED:BOOL=OFF"
-      "-DZSTD_LEGACY_SUPPORT:BOOL=ON"
-      "-DZSTD_BUILD_TESTS:BOOL=OFF"
-    ];
-  });
+  zstdStatic = zstd.override {
+    static = true;
+    legacySupport = true;
+    doCheck = false;
+  };
 
-  llvmBundle = llvmPackages_11;
+  llvmBundle = llvmPackages_12;
 
   stdenv =
     if useCcache
@@ -79,6 +75,7 @@ in stdenv.mkDerivation {
     python3
     ragel
     stow
+    util-linux
   ];
   buildInputs = [
     antlr3Patched
@@ -145,6 +142,8 @@ in stdenv.mkDerivation {
     patchShebangs ./merge-compdb.py
     patchShebangs ./seastar/scripts/seastar-json2code.py
     patchShebangs ./seastar/cooking.sh
+    patchShebangs ./install.sh
+    substituteInPlace ./seastar/cooking.sh --replace flock ${util-linux}/bin/flock
   '';
 
   IMPLICIT_CFLAGS = ''
@@ -160,7 +159,9 @@ in stdenv.mkDerivation {
   '';
 
   installPhase = ''
-    mkdir $out
-    cp -r * $out/
+    mkdir -p $out/bin
+    mkdir -p $out/share
+    cp build/release/scylla $out/bin
+    cp -rv dist/common/* $out/share
   '';
 }
